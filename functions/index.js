@@ -10,8 +10,8 @@ const {
 	postOneBug,
 	getBug,
 	commentOnBug,
-	likeBug,
-	unlikeBug,
+	followBug,
+	unfollowBug,
 	deleteBug
 } = require('./handlers/bugs');
 const {
@@ -28,8 +28,8 @@ const {
 app.get('/bugs', getAllBugs);
 app.post('/bug', FBAuth, postOneBug);
 app.get('/bug/:bugId', getBug);
-app.get('/bug/:bugId/like', FBAuth, likeBug);
-app.get('/bug/:bugId/unlike', FBAuth, unlikeBug);
+app.get('/bug/:bugId/follow', FBAuth, followBug);
+app.get('/bug/:bugId/unfollow', FBAuth, unfollowBug);
 app.delete('/bug/:bugId', FBAuth, deleteBug);
 
 app.post('/bug/:bugId/comment', FBAuth, commentOnBug);
@@ -49,29 +49,31 @@ app.post('/login', login);
 
 exports.api = functions.https.onRequest(app);
 
-exports.createNotificationOnLike = functions.firestore.document('likes/{id}').onCreate(snapshot => {
-	return db
-		.doc(`bugs/${snapshot.data().bugId}`)
-		.get()
-		.then(doc => {
-			if (doc.exists && doc.data().userHandle !== snapshot.data().userHandle) {
-				return db.doc(`/notifications/${snapshot.id}`).set({
-					createdAt: new Date().toISOString(),
-					recipient: doc.data().userHandle,
-					sender: snapshot.data().userHandle,
-					type: 'like',
-					read: false,
-					bugId: doc.id
-				});
-			}
-		})
-		.catch(err => {
-			console.error(err);
-		});
-});
+exports.createNotificationOnfollow = functions.firestore
+	.document('follows/{id}')
+	.onCreate(snapshot => {
+		return db
+			.doc(`bugs/${snapshot.data().bugId}`)
+			.get()
+			.then(doc => {
+				if (doc.exists && doc.data().userHandle !== snapshot.data().userHandle) {
+					return db.doc(`/notifications/${snapshot.id}`).set({
+						createdAt: new Date().toISOString(),
+						recipient: doc.data().userHandle,
+						sender: snapshot.data().userHandle,
+						type: 'follow',
+						read: false,
+						bugId: doc.id
+					});
+				}
+			})
+			.catch(err => {
+				console.error(err);
+			});
+	});
 
-exports.deleteNotificationOnUnlike = functions.firestore
-	.document('likes/{id}')
+exports.deleteNotificationOnUnfollow = functions.firestore
+	.document('follows/{id}')
 	.onDelete(snapshot => {
 		return db
 			.doc(`/notifications/${snapshot.id}`)
@@ -107,8 +109,6 @@ exports.createNotificationOnComment = functions.firestore
 	});
 
 exports.onUserImageChange = functions.firestore.document('/users/{userId}').onUpdate(change => {
-	console.log(change.before.data());
-	console.log(change.after.data());
 	if (change.before.data().imageUrl !== change.after.data().imageUrl) {
 		const batch = db.batch();
 		console.log('image has changed');
@@ -140,13 +140,13 @@ exports.onBugDelete = functions.firestore.document('bugs/{bugId}').onDelete((sna
 				batch.delete(db.doc(`/comments/${doc.id}`));
 			});
 			return db
-				.collection('likes')
+				.collection('follows')
 				.where('bugId', '==', bugId)
 				.get();
 		})
 		.then(data => {
 			data.forEach(doc => {
-				batch.delete(db.doc(`/likes/${doc.id}`));
+				batch.delete(db.doc(`/follows/${doc.id}`));
 			});
 			return db
 				.collection('notifications')
@@ -155,7 +155,7 @@ exports.onBugDelete = functions.firestore.document('bugs/{bugId}').onDelete((sna
 		})
 		.then(data => {
 			data.forEach(doc => {
-				batch.delete(db.doc(`/likes/${doc.id}`));
+				batch.delete(db.doc(`/follows/${doc.id}`));
 			});
 			return batch.commit();
 		})

@@ -36,13 +36,20 @@ exports.postOneBug = (req, res) => {
 	if (req.body.body.trim() === '') {
 		return res.status(400).json({ body: 'Body must not be empty' });
 	}
+
+	if (req.body.title.trim() === '') {
+		return res.status(400).json({ title: 'Title must not be empty' });
+	}
+
 	const newBug = {
 		body: req.body.body,
+		title: req.body.title,
 		userImage: req.user.imageUrl,
 		userHandle: req.user.handle,
 		createdAt: new Date().toISOString(),
-		likeCount: 0,
-		commentCount: 0
+		followCount: 0,
+		commentCount: 0,
+		comments: []
 	};
 
 	db.collection('bugs')
@@ -105,7 +112,11 @@ exports.commentOnBug = (req, res) => {
 			if (!doc.exists) {
 				return res.status(404).json({ error: 'Bug not found' });
 			}
-			return doc.ref.update({ commentCount: doc.data().commentCount + 1 });
+			const bugData = doc.data();
+			console.log('bugData', bugData);
+			const comments = bugData.comments;
+			comments.push(newComment);
+			return doc.ref.update({ commentCount: doc.data().commentCount + 1, comments: comments });
 		})
 		.then(() => {
 			return db.collection('comments').add(newComment);
@@ -119,9 +130,9 @@ exports.commentOnBug = (req, res) => {
 		});
 };
 
-exports.likeBug = (req, res) => {
-	const likeDoc = db
-		.collection('likes')
+exports.followBug = (req, res) => {
+	const followDoc = db
+		.collection('follows')
 		.where('userHandle', '==', req.user.handle)
 		.where('bugId', '==', req.params.bugId)
 		.limit(1);
@@ -136,7 +147,7 @@ exports.likeBug = (req, res) => {
 			if (doc.exists) {
 				bugData = doc.data();
 				bugData.bugId = doc.id;
-				return likeDoc.get();
+				return followDoc.get();
 			} else {
 				return res.status(404).json({ error: 'Bug not found' });
 			}
@@ -144,20 +155,20 @@ exports.likeBug = (req, res) => {
 		.then(data => {
 			if (data.empty) {
 				return db
-					.collection('likes')
+					.collection('follows')
 					.add({
 						bugId: req.params.bugId,
 						userHandle: req.user.handle
 					})
 					.then(() => {
-						bugData.likeCount++;
-						return bugDoc.update({ likeCount: bugData.likeCount });
+						bugData.followCount++;
+						return bugDoc.update({ followCount: bugData.followCount });
 					})
 					.then(() => {
 						return res.json(bugData);
 					});
 			} else {
-				return res.status(400).json({ error: 'Bug already liked' });
+				return res.status(400).json({ error: 'Bug already followd' });
 			}
 		})
 		.catch(err => {
@@ -166,9 +177,9 @@ exports.likeBug = (req, res) => {
 		});
 };
 
-exports.unlikeBug = (req, res) => {
-	const likeDoc = db
-		.collection('likes')
+exports.unfollowBug = (req, res) => {
+	const followDoc = db
+		.collection('follows')
 		.where('userHandle', '==', req.user.handle)
 		.where('bugId', '==', req.params.bugId)
 		.limit(1);
@@ -183,21 +194,21 @@ exports.unlikeBug = (req, res) => {
 			if (doc.exists) {
 				bugData = doc.data();
 				bugData.bugId = doc.id;
-				return likeDoc.get();
+				return followDoc.get();
 			} else {
 				return res.status(404).json({ error: 'Bug not found' });
 			}
 		})
 		.then(data => {
 			if (data.empty) {
-				return res.status(400).json({ error: 'Bug never liked' });
+				return res.status(400).json({ error: 'Bug never followd' });
 			} else {
 				return db
-					.doc(`/likes/${data.docs[0].id}`)
+					.doc(`/follows/${data.docs[0].id}`)
 					.delete()
 					.then(() => {
-						bugData.likeCount--;
-						return bugDoc.update({ likeCount: bugData.likeCount });
+						bugData.followCount--;
+						return bugDoc.update({ followCount: bugData.followCount });
 					})
 					.then(() => {
 						res.json(bugData);

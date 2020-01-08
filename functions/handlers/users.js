@@ -109,15 +109,15 @@ exports.getAuthenticatedUser = (req, res) => {
 				userData.credentials = doc.data();
 
 				return db
-					.collection('likes')
+					.collection('follows')
 					.where('userHandle', '==', req.user.handle)
 					.get();
 			}
 		})
 		.then(data => {
-			userData.likes = [];
+			userData.follows = [];
 			data.forEach(doc => {
-				userData.likes.push(doc.data());
+				userData.follows.push(doc.data());
 			});
 
 			return db
@@ -129,7 +129,7 @@ exports.getAuthenticatedUser = (req, res) => {
 		})
 		.then(data => {
 			userData.notifications = [];
-			//NB fix this like the other one
+			//NB fix this follow the other one
 			data.forEach(doc => {
 				userData.notifications.push({
 					recipient: doc.data().recipient,
@@ -169,7 +169,7 @@ exports.getUserDetails = (req, res) => {
 		})
 		.then(data => {
 			userData.bugs = [];
-			//NB I changed this from the docs instead of enumerating all the doc.data
+
 			data.forEach(doc => {
 				let bugData = doc.data();
 				bugData.bugId = doc.id;
