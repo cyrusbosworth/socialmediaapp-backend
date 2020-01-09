@@ -135,7 +135,7 @@ exports.getAuthenticatedUser = (req, res) => {
 					recipient: doc.data().recipient,
 					sender: doc.data().sender,
 					createdAt: doc.data().createdAt,
-					bugId: doc.data().bugId,
+					postId: doc.data().postId,
 					type: doc.data().type,
 					read: doc.data().read,
 					notificationId: doc.id
@@ -159,7 +159,7 @@ exports.getUserDetails = (req, res) => {
 			if (doc.exists) {
 				userData.user = doc.data();
 				return db
-					.collection('bugs')
+					.collection('posts')
 					.where('userHandle', '==', req.params.handle)
 					.orderBy('createdAt', 'desc')
 					.get();
@@ -168,12 +168,12 @@ exports.getUserDetails = (req, res) => {
 			}
 		})
 		.then(data => {
-			userData.bugs = [];
+			userData.posts = [];
 
 			data.forEach(doc => {
-				let bugData = doc.data();
-				bugData.bugId = doc.id;
-				userData.bugs.push(bugData);
+				let postData = doc.data();
+				postData.postId = doc.id;
+				userData.posts.push(postData);
 			});
 			return res.json(userData);
 		})

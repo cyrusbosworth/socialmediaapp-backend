@@ -4,16 +4,16 @@ const express = require('express');
 const app = express();
 const { db } = require('./util/admin');
 const FBAuth = require('./util/fbAuth');
-
+const cors = require('cors');
 const {
-	getAllBugs,
-	postOneBug,
-	getBug,
-	commentOnBug,
-	followBug,
-	unfollowBug,
-	deleteBug
-} = require('./handlers/bugs');
+	getAllPosts,
+	postOnePost,
+	getPost,
+	commentOnPost,
+	followPost,
+	unfollowPost,
+	deletePost
+} = require('./handlers/posts');
 const {
 	signup,
 	login,
@@ -24,15 +24,17 @@ const {
 	markNotificationsRead
 } = require('./handlers/users');
 
-//bug routes
-app.get('/bugs', getAllBugs);
-app.post('/bug', FBAuth, postOneBug);
-app.get('/bug/:bugId', getBug);
-app.get('/bug/:bugId/follow', FBAuth, followBug);
-app.get('/bug/:bugId/unfollow', FBAuth, unfollowBug);
-app.delete('/bug/:bugId', FBAuth, deleteBug);
+app.use(cors());
 
-app.post('/bug/:bugId/comment', FBAuth, commentOnBug);
+//post routes
+app.get('/posts', getAllPosts);
+app.post('/post', FBAuth, postOnePost);
+app.get('/post/:postId', getPost);
+app.get('/post/:postId/follow', FBAuth, followPost);
+app.get('/post/:postId/unfollow', FBAuth, unfollowPost);
+app.delete('/post/:postId', FBAuth, deletePost);
+
+app.post('/post/:postId/comment', FBAuth, commentOnPost);
 
 //user routes
 
@@ -53,7 +55,7 @@ exports.createNotificationOnfollow = functions.firestore
 	.document('follows/{id}')
 	.onCreate(snapshot => {
 		return db
-			.doc(`bugs/${snapshot.data().bugId}`)
+			.doc(`posts/${snapshot.data().postId}`)
 			.get()
 			.then(doc => {
 				if (doc.exists && doc.data().userHandle !== snapshot.data().userHandle) {
@@ -63,7 +65,7 @@ exports.createNotificationOnfollow = functions.firestore
 						sender: snapshot.data().userHandle,
 						type: 'follow',
 						read: false,
-						bugId: doc.id
+						postId: doc.id
 					});
 				}
 			})
@@ -88,7 +90,7 @@ exports.createNotificationOnComment = functions.firestore
 	.document('comments/{id}')
 	.onCreate(snapshot => {
 		return db
-			.doc(`bugs/${snapshot.data().bugId}`)
+			.doc(`posts/${snapshot.data().postId}`)
 			.get()
 			.then(doc => {
 				if (doc.exists && doc.data().userHandle !== snapshot.data().userHandle) {
@@ -98,7 +100,7 @@ exports.createNotificationOnComment = functions.firestore
 						sender: snapshot.data().userHandle,
 						type: 'comment',
 						read: false,
-						bugId: doc.id
+						postId: doc.id
 					});
 				}
 			})
@@ -113,14 +115,14 @@ exports.onUserImageChange = functions.firestore.document('/users/{userId}').onUp
 		const batch = db.batch();
 		console.log('image has changed');
 		return db
-			.collection('bugs')
+			.collection('posts')
 			.where('userHandle', '==', change.before.data().handle)
 			.get()
 
 			.then(data => {
 				data.forEach(doc => {
-					const bug = db.doc(`/bugs/${doc.id}`);
-					batch.update(bug, { userImage: change.after.data().imageUrl });
+					const post = db.doc(`/posts/${doc.id}`);
+					batch.update(post, { userImage: change.after.data().imageUrl });
 				});
 				return batch.commit();
 			})
@@ -128,36 +130,38 @@ exports.onUserImageChange = functions.firestore.document('/users/{userId}').onUp
 	} else return false;
 });
 
-exports.onBugDelete = functions.firestore.document('bugs/{bugId}').onDelete((snapshot, context) => {
-	const bugId = context.params.bugId;
-	const batch = db.batch();
-	return db
-		.collection('comments')
-		.where('bugId', '==', bugId)
-		.get()
-		.then(data => {
-			data.forEach(doc => {
-				batch.delete(db.doc(`/comments/${doc.id}`));
-			});
-			return db
-				.collection('follows')
-				.where('bugId', '==', bugId)
-				.get();
-		})
-		.then(data => {
-			data.forEach(doc => {
-				batch.delete(db.doc(`/follows/${doc.id}`));
-			});
-			return db
-				.collection('notifications')
-				.where('bugId', '==', bugId)
-				.get();
-		})
-		.then(data => {
-			data.forEach(doc => {
-				batch.delete(db.doc(`/follows/${doc.id}`));
-			});
-			return batch.commit();
-		})
-		.catch(err => console.error(err));
-});
+exports.onPostDelete = functions.firestore
+	.document('posts/{postId}')
+	.onDelete((snapshot, context) => {
+		const postId = context.params.postId;
+		const batch = db.batch();
+		return db
+			.collection('comments')
+			.where('postId', '==', postId)
+			.get()
+			.then(data => {
+				data.forEach(doc => {
+					batch.delete(db.doc(`/comments/${doc.id}`));
+				});
+				return db
+					.collection('follows')
+					.where('postId', '==', postId)
+					.get();
+			})
+			.then(data => {
+				data.forEach(doc => {
+					batch.delete(db.doc(`/follows/${doc.id}`));
+				});
+				return db
+					.collection('notifications')
+					.where('postId', '==', postId)
+					.get();
+			})
+			.then(data => {
+				data.forEach(doc => {
+					batch.delete(db.doc(`/follows/${doc.id}`));
+				});
+				return batch.commit();
+			})
+			.catch(err => console.error(err));
+	});
